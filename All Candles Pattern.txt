@@ -1,0 +1,189 @@
+//@version=5
+indicator("Candlesticks [DzTraders]", overlay = true, max_labels_count = 500)
+//------------------------------------------------------------------------------
+//Settings
+//-----------------------------------------------------------------------------{
+length = input.int(14, 'Trend Length'
+  , minval = 0)
+
+alpha = input.float(50, 'Convergence'
+  , minval = 0
+  , maxval = 100)
+
+smooth = input.int(7, 'Smooth'
+  , minval = 1)
+
+//Patterns
+enable_hammer = input(true, 'Hammer'
+  , group = 'patterns')
+
+enable_ihammer = input(true, 'Inverted Hammer'
+  , group = 'patterns')
+
+enable_shooting = input(true, 'Shooting Star'
+  , group = 'patterns')
+
+enable_hanging = input(true, 'Hanging Man'
+  , group = 'patterns')
+
+enable_bulleng = input(false, 'Bullish Engulfing'
+  , group = 'patterns')
+
+enable_beareng = input(false, 'Bearish Engulfing'
+  , group = 'patterns')
+
+enable_wm = input(true, 'White Marubozu'
+  , group = 'patterns')
+
+enable_bm = input(true, 'Black Marubozu'
+  , group = 'patterns')
+  
+//Style
+bull_css = input(#0cb51a, 'Bullish Color'
+  , group = 'Style')
+
+avg_css = input(#ff5d00, 'Average Color'
+  , group = 'Style')
+
+bear_css = input(#ff1100, 'Bearish Color'
+  , group = 'Style')
+
+fade = input.int(200, 'Fading Period'
+  , minval = 1)
+
+//-----------------------------------------------------------------------------}
+//Variables/Functions
+//-----------------------------------------------------------------------------{
+n = bar_index
+o = open,h = high,l = low,c = close
+
+atr = ta.atr(20) / 2 
+st = ta.stoch(c, c, c, length)
+downtrend = st < 50
+uptrend = st > 50
+
+d = math.abs(c - o)
+
+//Label
+lbl(y, txt, direction, tlt)=>
+    label.new(n, y, txt
+          , size = size.small
+          , style = direction == 1 ? label.style_label_up : label.style_label_down
+          , color = direction == 1 ? bull_css : bear_css
+          , textcolor = color.white
+          , tooltip = tlt)
+
+//-----------------------------------------------------------------------------}
+//Tooltips
+//-----------------------------------------------------------------------------{
+var hammer_tlt = "يتكون نموذج شمعة المطرقة من جسم قصير بفتيل سفلي طويل ، ويوجد في الجزء السفلي من الاتجاه الهابط."
+  + "\n" + "\nA يُظهر المطرقة أنه على الرغم من وجود ضغوط بيع خلال اليوم ، إلا أن ضغط الشراء القوي أدى في النهاية إلى ارتفاع السعر مرة أخرى." 
+
+var ihammer_tlt = "المطرقة المقلوبة هي نمط مشابه لنمط المطرقة. الفرق الوحيد هو أن الذيل العلوي طويل ، بينما الذيل السفلي قصير."
+  + "\n" + "\n يشير إلى وجود ضغط شراء ، يليه ضغط بيع لم يكن قوياً بما يكفي لدفع سعر السوق للأسفل. تشير المطرقة العكسية إلى أن المشترين سيكونون قريبين من السيطرة على السوق."
+
+var bulleng_tlt = "يتكون نموذج الابتلاع الصعودي من شمعتين. الشمعة الأولى عبارة عن جسم أحمر قصير تغمره شمعة خضراء أكبر"
+  + "\n" + "\n على الرغم من أن اليوم الثاني يفتح أقل من الأول ، إلا أن السوق الصاعد يدفع السعر للأعلى ، وبلغ ذروته في فوز واضح للمشترين"
+
+var wm_tlt = "الماروبوزو الأبيض هو تشكيل شموع واحد يتكون بعد ترند هابط ويشير إلى انعكاس صعودي."
+  + "\n" + "\n تتميز هذه الشمعة بجسم صعودي طويل بدون ظلال علوية أو سفلية ، مما يعكس ضغوط شراء قوية."
+  
+var shooting_tlt = "نجم الرماية هو نفس شكل المطرقة المقلوبة ، لكنه يتشكل في اتجاه صعودي: له جسم سفلي صغير وفتيل علوي طويل."
+  + "\n" + "\n عادة ، سوف يفجر السوق ارتفاعًا طفيفًا عند الافتتاح والارتفاع إلى أعلى مستوى خلال اليوم قبل الإغلاق عند سعر أعلى من الافتتاح مباشرةً - مثل سقوط نجم على الأرض."
+
+var hanging_tlt = "الرجل المعلق هو المكافئ الهبوطي للمطرقة ؛ لها نفس الشكل ولكنها تتشكل في نهاية الاتجاه الصعودي."
+  + "\n" + "\n يشير إلى أنه كانت هناك عمليات بيع كبيرة خلال اليوم ، لكن المشترين تمكنوا من دفع السعر للأعلى مرة أخرى. غالبًا ما يُنظر إلى عمليات البيع الكبيرة على أنها مؤشر على أن المضاربين على الارتفاع يفقدون السيطرة على السوق."
+
+var beareng_tlt = "يحدث نمط الابتلاع الهبوطي في نهاية الترند الصاعد. الشمعة الأولى لها جسم أخضر صغير تغمره شمعة حمراء طويلة لاحقة."
+  + "\n" + "\n يشير إلى ذروة أو تباطؤ حركة السعر ، وهو علامة على هبوط وشيك في السوق. كلما انخفضت الشمعة الثانية ، زادت أهمية الاتجاه على الأرجح."
+
+var bm_tlt = "الماروبوزو الأسود هو تشكيل شموع واحد يتكون بعد ترند صاعد ويشير إلى انعكاس هبوطي."
+  + "\n" + "\n تتميز هذه الشمعة بجسم هبوطي طويل بدون ظلال علوية أو سفلية ، مما يعكس ضغوط بيع قوية."
+
+//-----------------------------------------------------------------------------}
+//Pattern Rules
+//-----------------------------------------------------------------------------{
+hammer = downtrend and math.min(o, c) - l > 2 * d and h - math.max(c, o) < d / 4
+ihammer = downtrend and h - math.max(o, c) > 2 * d and math.min(c, o) - l < d / 4
+
+shooting = uptrend and h - math.max(o, c) > 2 * d and math.min(c, o) - l < d / 4
+hanging = uptrend and math.min(o, c) - l > 2 * d and h - math.max(c, o) < d / 4
+
+bulleng = downtrend and c > o and c[1] < o[1] and c > o[1] and d > atr
+beareng = uptrend and c < o and c[1] > o[1] and c < o[1] and d > atr
+
+wm = c > o and h - math.max(o, c) + math.min(o, c) - l < d / 10 and d > atr and downtrend[1]
+bm = c < o and h - math.max(o, c) + math.min(o, c) - l < d / 10 and d > atr and uptrend[1]
+
+//-----------------------------------------------------------------------------}
+//Channel
+//-----------------------------------------------------------------------------{
+var max = h
+var min = l
+
+//Bullish Patterns
+if hammer and enable_hammer
+    max += alpha / 100 * (c - max)
+    lbl(low, 'H', 1, hammer_tlt)
+    
+if ihammer and enable_ihammer
+    max += alpha / 100 * (c - max)
+    lbl(low, 'IH', 1, ihammer_tlt)
+
+if bulleng and enable_bulleng
+    max += alpha / 100 * (c - max)
+    lbl(low, 'BE', 1, bulleng_tlt)
+
+if wm and enable_wm
+    max += alpha / 100 * (c - max)
+    lbl(low, 'WM', 1, wm_tlt)
+
+//Bearish Patterns
+if shooting and enable_shooting
+    min += alpha / 100 * (c - min)
+    lbl(high, 'SS', 0, shooting_tlt)
+
+if hanging and enable_hanging
+    min += alpha / 100 * (c - min)
+    lbl(high, 'HM', 0, hanging_tlt)
+
+if beareng and enable_beareng
+    min += alpha / 100 * (c - min)
+    lbl(high, 'BE', 0, beareng_tlt)
+
+if bm and enable_bm
+    min += alpha / 100 * (c - min)
+    lbl(high, 'BM', 0, bm_tlt)
+
+max := math.max(c, max)
+min := math.min(c, min)
+
+smooth_max = ta.ema(max, smooth)
+smooth_min = ta.ema(min, smooth)
+avg = math.avg(smooth_max, smooth_min)
+
+//-----------------------------------------------------------------------------}
+//Plots
+//-----------------------------------------------------------------------------{
+var os = 0
+os := c > smooth_max ? 1 : c < smooth_min ? 0 : os
+
+var fade_max = 0
+fade_max := os == 0 ? fade_max + 1 : 0
+
+var fade_min = 0
+fade_min := os == 1 ? fade_min + 1 : 0
+
+plot_0 = plot(smooth_max, 'Upper', bull_css)
+
+plot_1 = plot(avg, 'Average', avg_css)
+
+plot_2 = plot(smooth_min, 'Lower', bear_css)
+
+css1 = color.from_gradient(fade_max, 0, fade, color.new(bull_css, 80), color.new(bull_css, 100))
+fill(plot_0, plot_1, css1)
+
+css2 = color.from_gradient(fade_min, 0, fade, color.new(bear_css, 80), color.new(bear_css, 100))
+fill(plot_1, plot_2, css2)
+
+//-----------------------------------------------------------------------------}
